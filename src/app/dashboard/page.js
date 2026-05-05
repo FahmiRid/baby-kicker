@@ -685,7 +685,7 @@ export default function Dashboard() {
 
       <div className="px-6 mb-8 max-w-2xl mx-auto w-full"><div className="bg-[#F7ECEC] rounded-[2.5rem] p-6 space-y-4"><button className="w-full flex items-center gap-4 text-[#4A4A4A] font-bold"><HelpCircle className="w-5 h-5 text-[#FF818D]" /> Help & FAQ</button><div className="h-[1px] bg-[#FFE6E9]"></div><button className="w-full flex items-center gap-4 text-[#4A4A4A] font-bold"><HelpCircle className="w-5 h-5 text-[#FF818D]" /> About Baby Kick Counter</button></div></div>
       <div className="px-6 mb-8 max-w-2xl mx-auto w-full"><div className="bg-[#FFE6E9] rounded-[2.5rem] p-8 space-y-2"><h3 className="font-bold text-[#FF818D] text-lg">Disclaimer</h3><p className="text-[#8E8E8E] text-xs leading-relaxed">This app is for tracking purposes only and does not replace medical advice. If you have concerns about your baby's movements, please contact your healthcare provider.</p></div></div>
-      <div className="px-6 mb-8 max-w-2xl mx-auto w-full"><button onClick={() => signOut()} className="w-full bg-[#FF818D] py-5 px-8 rounded-full flex items-center justify-center gap-3 text-white font-bold shadow-[0_10px_25px_rgba(255,129,141,0.4)] active:scale-95 transition-all"><LogOut className="w-5 h-5" /> Log Out</button></div>
+      <div className="px-6 mb-8 max-w-2xl mx-auto w-full"><button onClick={() => signOut({ callbackUrl: "/login" })} className="w-full bg-[#FF818D] py-5 px-8 rounded-full flex items-center justify-center gap-3 text-white font-bold shadow-[0_10px_25px_rgba(255,129,141,0.4)] active:scale-95 transition-all"><LogOut className="w-5 h-5" /> Log Out</button></div>
       {showDatePicker && renderCalendar()}
     </div>
   );
