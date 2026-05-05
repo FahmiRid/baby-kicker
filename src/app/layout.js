@@ -7,7 +7,7 @@ const outfit = Outfit({
 });
 
 export const metadata = {
-  title: "Baby Kicker - Welcome Mama",
+  title: "Baby Kicker 💛",
   description: "Track your baby's movements with love and care.",
 };
 
