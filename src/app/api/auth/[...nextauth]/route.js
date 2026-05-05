@@ -18,6 +18,10 @@ export const authOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+        if (!supabase) {
+          console.error("Supabase client is not initialized. Check environment variables.");
+          throw new Error("Database connection error");
+        }
 
         // Find user in Supabase
         const { data: user, error } = await supabase
