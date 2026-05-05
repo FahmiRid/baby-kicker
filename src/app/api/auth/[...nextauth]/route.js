@@ -27,14 +27,20 @@ export const authOptions = {
         const { data: user, error } = await supabase
           .from("users")
           .select("*")
-          .eq("email", credentials.email)
+          .ilike("email", credentials.email.toLowerCase())
           .single();
 
-        if (error || !user) return null;
+        if (error || !user) {
+          console.log("Login failed: User not found or DB error", error);
+          return null;
+        }
 
         // Verify password
         const isPasswordCorrect = await bcrypt.compare(credentials.password, user.password);
-        if (!isPasswordCorrect) return null;
+        if (!isPasswordCorrect) {
+          console.log("Login failed: Password mismatch for", credentials.email);
+          return null;
+        }
 
         return {
           id: user.id,
