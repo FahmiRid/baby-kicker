@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
+    signIn("google", { callbackUrl: "https://baby-kicker-blwv.vercel.app/dashboard" });
   };
 
   const handleSubmit = async (e) => {
