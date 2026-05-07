@@ -1,0 +1,17 @@
+name: Send Reminders
+
+on:
+  schedule:
+    # Runs every minute
+    - cron: "* * * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reminder cron endpoint
+        run: |
+          curl -s -X GET "${{ secrets.APP_URL }}/api/cron/send-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP Status: %{http_code}\n"
