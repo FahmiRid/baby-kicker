@@ -11,6 +11,25 @@ import { supabase } from "@/lib/supabase";
 
 export default function Dashboard() {
   const { data: session } = useSession();
+
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF5F5] p-6 text-center">
+        <Heart className="w-16 h-16 text-[#FF818D] mb-4 animate-pulse" />
+        <h1 className="text-2xl font-bold text-[#4A4A4A] mb-2">Configuration Missing</h1>
+        <p className="text-[#8E8E8E] mb-6 max-w-sm">
+          Supabase environment variables are missing. Please set up your .env.local file.
+        </p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="py-3 px-8 bg-[#FF818D] text-white font-bold rounded-full shadow-lg"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   const [activeTab, setActiveTab] = useState("home"); 
   const [historyFilter, setHistoryFilter] = useState("day"); 
   const [kicks, setKicks] = useState(0);
@@ -32,6 +51,14 @@ export default function Dashboard() {
     dailyGoal: 10,
     month: 6
   });
+
+  // Reminder state
+  const [reminder, setReminder] = useState({
+    enabled: false,
+    time: "20:30", // 24h HH:MM
+    days: [1, 2, 3, 4, 5], // 0=Sun … 6=Sat
+  });
+  const reminderTimerRef = useRef(null);
 
   // Helper to calculate weeks/days from LMP
   const calculateFromLMP = (lmpDate) => {
@@ -95,8 +122,114 @@ export default function Dashboard() {
     if (session?.user?.email) {
       fetchHistory();
       fetchProfile();
+      fetchReminder();
     }
   }, [session, activeTab]);
+
+  const fetchReminder = async () => {
+    const { data, error } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('id', session.user.email)
+      .single();
+
+    if (data && !error) {
+      setReminder({
+        enabled: data.enabled,
+        time: data.reminder_time || "20:30",
+        days: data.repeat_days || [1, 2, 3, 4, 5],
+      });
+    }
+  };
+
+  // Schedule browser notification for the reminder
+  const scheduleReminder = (reminderState) => {
+    // Clear any existing scheduled reminder
+    if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
+    if (!reminderState.enabled) return;
+
+    const requestAndSchedule = () => {
+      const now = new Date();
+      const [hours, minutes] = reminderState.time.split(":").map(Number);
+      const next = new Date();
+      next.setHours(hours, minutes, 0, 0);
+      // If the time has already passed today, schedule for tomorrow
+      if (next <= now) next.setDate(next.getDate() + 1);
+
+      const msUntilNext = next - now;
+
+      reminderTimerRef.current = setTimeout(() => {
+        const dayOfWeek = next.getDay(); // 0=Sun … 6=Sat
+        if (reminderState.days.includes(dayOfWeek)) {
+          new Notification("Baby Kick Reminder 💛", {
+            body: "Time to count your baby's kicks! Let's track those little movements. 👶",
+            icon: "/baby-icon.png",
+          });
+        }
+        // Reschedule for the next day
+        scheduleReminder(reminderState);
+      }, msUntilNext);
+    };
+
+    if (Notification.permission === "granted") {
+      requestAndSchedule();
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") requestAndSchedule();
+      });
+    }
+  };
+
+  // Re-schedule whenever reminder settings change
+  useEffect(() => {
+    scheduleReminder(reminder);
+    return () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); };
+  }, [reminder]);
+
+  const handleSaveReminder = async () => {
+    // Convert local time to UTC for storage so the edge function (which runs in UTC) fires correctly
+    const [localHours, localMinutes] = reminder.time.split(":").map(Number);
+    const localDate = new Date();
+    localDate.setHours(localHours, localMinutes, 0, 0);
+    const utcTime = `${localDate.getUTCHours().toString().padStart(2, "0")}:${localDate.getUTCMinutes().toString().padStart(2, "0")}`;
+
+    const { error } = await supabase
+      .from('reminders')
+      .upsert({
+        id: session.user.email,
+        enabled: reminder.enabled,
+        reminder_time: utcTime,
+        repeat_days: reminder.days,
+        updated_at: new Date(),
+      });
+
+    if (error) {
+      console.error("Error saving reminder:", error);
+      triggerToast("Oops! Couldn't save reminder. 🥺");
+      return;
+    }
+
+    // Send a confirmation email to the logged-in user
+    if (reminder.enabled) {
+      try {
+        await fetch("/api/send-reminder", { method: "POST" });
+      } catch (emailErr) {
+        console.error("Confirmation email failed:", emailErr);
+      }
+    }
+
+    triggerToast("Reminder saved! Check your email. 🔔💛");
+    scheduleReminder(reminder);
+  };
+
+  const toggleReminderDay = (dayIndex) => {
+    setReminder((prev) => ({
+      ...prev,
+      days: prev.days.includes(dayIndex)
+        ? prev.days.filter((d) => d !== dayIndex)
+        : [...prev.days, dayIndex],
+    }));
+  };
 
   const fetchProfile = async () => {
     const { data, error } = await supabase
@@ -752,12 +885,74 @@ export default function Dashboard() {
       <div className="px-6 mb-8 max-w-2xl mx-auto w-full">
         <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-[#FFE6E9] flex items-center justify-center"><Bell className="w-5 h-5 text-[#FF818D]" /></div><div><h3 className="font-bold text-[#4A4A4A]">Daily Reminder</h3><p className="text-[#8E8E8E] text-xs">We'll remind you to count.</p></div></div>
-            <div className="w-12 h-6 bg-[#FF818D] rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#FFE6E9] flex items-center justify-center">
+                <Bell className="w-5 h-5 text-[#FF818D]" />
+              </div>
+              <div>
+                <h3 className="font-bold text-[#4A4A4A]">Daily Reminder</h3>
+                <p className="text-[#8E8E8E] text-xs">We'll remind you to count.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setReminder((prev) => ({ ...prev, enabled: !prev.enabled }))}
+              className={`w-12 h-6 rounded-full relative cursor-pointer transition-all ${
+                reminder.enabled ? "bg-[#FF818D]" : "bg-[#E0E0E0]"
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  reminder.enabled ? "right-1" : "left-1"
+                }`}
+              ></div>
+            </button>
           </div>
           <div className="space-y-4">
-            <div className="space-y-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Reminder Time</label><div className="relative"><input type="text" defaultValue="08:30 PM" className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium" /><Clock className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-[#4A4A4A]" /></div></div>
-            <div className="space-y-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Repeat</label><div className="flex justify-between gap-1 overflow-x-auto pb-2">{['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, idx) => (<div key={day} className={`min-w-[40px] h-10 rounded-full flex items-center justify-center text-[8px] font-black tracking-tighter ${idx < 5 ? 'bg-[#FF818D] text-white shadow-lg' : 'bg-[#FDF1F1] text-[#8E8E8E]'}`}>{day}</div>))}</div></div>
+            <div className="space-y-2">
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Reminder Time</label>
+              <div className="relative">
+                <input
+                  type="time"
+                  value={reminder.time}
+                  onChange={(e) => setReminder((prev) => ({ ...prev, time: e.target.value }))}
+                  className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium"
+                />
+                <Clock className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-[#4A4A4A] pointer-events-none" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Repeat</label>
+              <div className="flex justify-between gap-1 overflow-x-auto pb-2">
+                {[
+                  { label: "SUN", value: 0 },
+                  { label: "MON", value: 1 },
+                  { label: "TUE", value: 2 },
+                  { label: "WED", value: 3 },
+                  { label: "THU", value: 4 },
+                  { label: "FRI", value: 5 },
+                  { label: "SAT", value: 6 },
+                ].map((day) => (
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => toggleReminderDay(day.value)}
+                    className={`min-w-[40px] h-10 rounded-full flex items-center justify-center text-[8px] font-black tracking-tighter transition-all ${
+                      reminder.days.includes(day.value)
+                        ? "bg-[#FF818D] text-white shadow-lg"
+                        : "bg-[#FDF1F1] text-[#8E8E8E]"
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleSaveReminder}
+              className="w-full py-4 bg-[#FF818D] text-white font-bold rounded-full shadow-[0_10px_25px_rgba(255,129,141,0.3)] hover:scale-[1.02] active:scale-95 transition-all mt-4"
+            >
+              Save Reminder
+            </button>
           </div>
         </div>
       </div>

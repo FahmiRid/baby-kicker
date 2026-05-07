@@ -6,6 +6,11 @@ export async function POST(request) {
   try {
     const { name, email, password } = await request.json();
 
+    if (!supabase) {
+      console.error("Supabase client is not initialized. Check environment variables.");
+      return NextResponse.json({ error: "Database connection error. Please check your environment variables." }, { status: 503 });
+    }
+
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }

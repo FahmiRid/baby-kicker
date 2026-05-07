@@ -1,0 +1,5 @@
+[functions.send-reminders]
+verify_jwt = false
+
+[functions.send-reminders.cron]
+schedule = "* * * * *"  # Every minute — matches HH:MM granularity of reminder_time

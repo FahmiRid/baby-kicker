@@ -16,9 +16,29 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Local Setup
+ 
+This project requires Supabase and NextAuth to be configured.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Environment Variables
+Create a `.env.local` file in the root directory and add the following (see `.env.example`):
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXTAUTH_SECRET=your-random-secret
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### 2. Database Schema
+Run the SQL queries in `setup.sql` in your Supabase SQL Editor to create the necessary tables:
+- `users`: For authentication.
+- `profiles`: For user pregnancy info.
+- `history`: For tracking kicks.
+
+### 3. Run Development Server
+```bash
+npm run dev
+```
 
 ## Learn More
 
