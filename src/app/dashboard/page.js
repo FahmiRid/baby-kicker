@@ -28,8 +28,42 @@ export default function Dashboard() {
     weeks: 25,
     days: 4,
     edd: "2026-08-16",
-    dailyGoal: 10
+    lmp: "2025-11-09", // Last Menstrual Period
+    dailyGoal: 10,
+    month: 6
   });
+
+  // Helper to calculate weeks/days from LMP
+  const calculateFromLMP = (lmpDate) => {
+    const lmp = new Date(lmpDate);
+    const today = new Date();
+    const diffTime = Math.abs(today - lmp);
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    const weeks = Math.floor(totalDays / 7);
+    const days = totalDays % 7;
+    const edd = new Date(lmp);
+    edd.setDate(lmp.getDate() + 280); // Standard 280 days
+    
+    // Calculate month (approximate)
+    const month = Math.min(9, Math.floor(weeks / 4) + 1);
+    
+    return { 
+      weeks, 
+      days, 
+      edd: edd.toISOString().split('T')[0], 
+      lmp: lmp.toISOString().split('T')[0],
+      month 
+    };
+  };
+
+  // Helper to calculate lmp from EDD
+  const calculateFromEDD = (eddDate) => {
+    const edd = new Date(eddDate);
+    const lmp = new Date(edd);
+    lmp.setDate(edd.getDate() - 280);
+    return calculateFromLMP(lmp);
+  };
 
   // Tips Slider State
   const tips = [
@@ -49,6 +83,7 @@ export default function Dashboard() {
 
   // Custom Date Picker State
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState("edd"); // "edd" or "lmp"
   const [viewDate, setViewDate] = useState(new Date(profile.edd || new Date()));
 
   // Tooltip state for chart
@@ -71,14 +106,24 @@ export default function Dashboard() {
       .single();
 
     if (data && !error) {
+      const calculated = data.last_period ? calculateFromLMP(data.last_period) : { 
+        weeks: data.weeks_pregnant, 
+        days: data.days_pregnant, 
+        edd: data.due_date,
+        lmp: "",
+        month: Math.min(9, Math.floor(data.weeks_pregnant / 4) + 1)
+      };
+
       setProfile({
         name: data.name || session?.user?.name || "",
-        weeks: data.weeks_pregnant,
-        days: data.days_pregnant,
-        edd: data.due_date,
-        dailyGoal: data.daily_goal
+        weeks: calculated.weeks,
+        days: calculated.days,
+        edd: calculated.edd,
+        lmp: data.last_period || "",
+        dailyGoal: data.daily_goal,
+        month: calculated.month
       });
-      setViewDate(new Date(data.due_date));
+      setViewDate(new Date(calculated.edd));
     } else if (!data) {
       setProfile(prev => ({ ...prev, name: session?.user?.name || "" }));
     }
@@ -92,37 +137,6 @@ export default function Dashboard() {
     setTimeout(() => setToast({ show: false, message: "" }), 3000);
   };
 
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const newProfile = {
-      name: formData.get("name"),
-      weeks: parseInt(formData.get("weeks")),
-      days: parseInt(formData.get("days")),
-      edd: profile.edd,
-      dailyGoal: parseInt(formData.get("goal"))
-    };
-
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: session.user.email,
-        name: newProfile.name,
-        weeks_pregnant: newProfile.weeks,
-        days_pregnant: newProfile.days,
-        due_date: newProfile.edd,
-        daily_goal: newProfile.dailyGoal,
-        updated_at: new Date().toISOString()
-      });
-
-    if (error) {
-      console.error("Error saving profile:", error);
-      triggerToast("Oops! Something went wrong. 🥺");
-    } else {
-      setProfile(newProfile);
-      triggerToast("Profile updated beautifully! 💛✨");
-    }
-  };
 
   const handleShare = async () => {
     if (!summaryData) return;
@@ -248,59 +262,6 @@ export default function Dashboard() {
 
   const togglePause = () => setIsActive(!isActive);
 
-  // Custom Calendar Logic
-  const renderCalendar = () => {
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-    const firstDayOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
-    
-    const prevMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
-    const nextMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
-
-    const handleDateSelect = (day) => {
-      const y = viewDate.getFullYear();
-      const m = String(viewDate.getMonth() + 1).padStart(2, '0');
-      const d = String(day).padStart(2, '0');
-      const eddString = `${y}-${m}-${d}`;
-      setProfile({ ...profile, edd: eddString });
-      setShowDatePicker(false);
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-        <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-300">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-[#4A4A4A]">{months[viewDate.getMonth()]} {viewDate.getFullYear()}</h3>
-            <div className="flex gap-2">
-              <button onClick={prevMonth} className="p-2 hover:bg-[#FFF5F5] rounded-full transition-colors"><ChevronLeft className="w-5 h-5 text-[#FF818D]" /></button>
-              <button onClick={nextMonth} className="p-2 hover:bg-[#FFF5F5] rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-[#FF818D]" /></button>
-            </div>
-          </div>
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center text-[10px] font-black text-[#B0B0B0] py-2 uppercase">{d}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} />)}
-            {[...Array(daysInMonth)].map((_, i) => {
-              const day = i + 1;
-              const dateString = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const isSelected = profile.edd === dateString;
-              return (
-                <button 
-                  key={day} 
-                  onClick={() => handleDateSelect(day)}
-                  className={`aspect-square rounded-2xl flex items-center justify-center text-sm font-bold transition-all ${isSelected ? 'bg-[#FF818D] text-white shadow-lg scale-110' : 'hover:bg-[#FFF5F5] text-[#4A4A4A]'}`}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-          <button onClick={() => setShowDatePicker(false)} className="w-full mt-8 py-4 bg-[#FDF1F1] text-[#FF818D] font-bold rounded-full flex items-center justify-center gap-2 active:scale-95 transition-all"><X className="w-4 h-4" /> Close</button>
-        </div>
-      </div>
-    );
-  };
 
   const renderHome = () => {
     const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -639,6 +600,107 @@ export default function Dashboard() {
     );
   };
 
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const newProfile = {
+      name: formData.get("name"),
+      weeks_pregnant: profile.weeks,
+      days_pregnant: profile.days,
+      due_date: profile.edd,
+      last_period: profile.lmp,
+      daily_goal: parseInt(formData.get("goal"))
+    };
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ 
+        id: session.user.email,
+        ...newProfile,
+        updated_at: new Date()
+      });
+
+    if (error) {
+      console.error("Error saving profile:", error);
+      triggerToast("Oops! Something went wrong. 🥺");
+    } else {
+      triggerToast("Profile updated beautifully! 💛✨");
+    }
+  };
+
+  const handleDateSelect = (day) => {
+    // Create date at noon to avoid timezone shift issues
+    const selectedDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day, 12, 0, 0);
+    let calculated;
+    
+    if (datePickerMode === "lmp") {
+      calculated = calculateFromLMP(selectedDate);
+    } else {
+      calculated = calculateFromEDD(selectedDate);
+    }
+    
+    console.log("Calculated Info:", calculated); // Debug log
+    
+    setProfile(prev => ({ 
+      ...prev, 
+      ...calculated
+    }));
+    setShowDatePicker(false);
+  };
+
+  const renderCalendar = () => {
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+    const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+
+    const changeMonth = (offset) => {
+      const nextDate = new Date(viewDate);
+      nextDate.setMonth(viewDate.getMonth() + offset);
+      setViewDate(nextDate);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-bold text-[#4A4A4A]">{datePickerMode === "lmp" ? "Last Period" : "Due Date"}</h3>
+            <button onClick={() => setShowDatePicker(false)} className="p-2 hover:bg-[#FFF5F5] rounded-full transition-colors"><X className="w-5 h-5 text-[#4A4A4A]" /></button>
+          </div>
+          
+          <div className="flex items-center justify-between mb-6">
+            <button onClick={() => changeMonth(-1)} className="p-2 text-[#FF818D]"><ChevronLeft className="w-6 h-6" /></button>
+            <span className="font-bold text-[#4A4A4A]">{months[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+            <button onClick={() => changeMonth(1)} className="p-2 text-[#FF818D]"><ChevronRight className="w-6 h-6" /></button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center text-[10px] font-bold text-[#B0B0B0] py-2">{d}</div>)}
+            {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const d = i + 1;
+              const targetDateStr = datePickerMode === "edd" ? profile.edd : profile.lmp;
+              const targetDate = targetDateStr ? new Date(targetDateStr) : null;
+              const isSelected = targetDate && !isNaN(targetDate) && 
+                                targetDate.getDate() === d && 
+                                targetDate.getMonth() === viewDate.getMonth() &&
+                                targetDate.getFullYear() === viewDate.getFullYear();
+
+              return (
+                <button 
+                  key={d} 
+                  onClick={() => handleDateSelect(d)}
+                  className={`aspect-square rounded-xl flex items-center justify-center text-sm font-bold transition-all ${isSelected ? 'bg-[#FF818D] text-white shadow-lg' : 'hover:bg-[#FFF5F5] text-[#4A4A4A]'}`}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderSettings = () => (
     <div className="flex flex-col font-sans pb-12">
       <div className="px-6 pt-12 pb-6 max-w-2xl mx-auto w-full"><h1 className="text-4xl font-bold text-[#4A4A4A]">Settings</h1></div>
@@ -646,27 +708,44 @@ export default function Dashboard() {
       <div className="px-6 mb-8 max-w-2xl mx-auto w-full">
         <div className="bg-white rounded-[2.5rem] p-6 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white">
           <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#FFF5F5]"><Image src={session?.user?.image || "/baby-avatar.png"} alt="Profile" width={64} height={64} className="object-cover" /></div>
-          <div><h2 className="text-xl font-bold text-[#4A4A4A] flex items-center gap-2">{profile.name || "Mama"} 💛</h2><p className="text-[#8E8E8E] text-sm font-medium">{profile.weeks} Weeks Pregnant • Due {profile.edd}</p></div>
+          <div><h2 className="text-xl font-bold text-[#4A4A4A] flex items-center gap-2">{profile.name || "Mama"} 💛</h2><p className="text-[#8E8E8E] text-sm font-medium">{profile.weeks} Weeks Pregnant • Month {profile.month}</p></div>
         </div>
       </div>
 
       <div className="px-6 mb-8 max-w-2xl mx-auto w-full">
         <form onSubmit={handleSaveProfile} className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white">
           <div className="flex items-center gap-2 mb-6"><User className="w-5 h-5 text-[#FF818D]" /><h3 className="font-bold text-[#4A4A4A]">Pregnancy Info</h3></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div className="space-y-2 md:col-span-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Name</label><input type="text" name="name" defaultValue={profile.name} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium" /></div>
-            <div className="space-y-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Weeks Pregnant</label><input type="number" name="weeks" defaultValue={profile.weeks} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium" /></div>
-            <div className="space-y-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Days</label><input type="number" name="days" defaultValue={profile.days} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium" /></div>
+            
             <div className="space-y-2 md:col-span-2">
-              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Due Date</label>
-              <div onClick={() => setShowDatePicker(true)} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all">
-                <span className="text-[#4A4A4A] font-medium">{new Date(profile.edd).toLocaleDateString("en-US", { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Last Period Start</label>
+              <div onClick={() => { setDatePickerMode("lmp"); setViewDate(new Date(profile.lmp || new Date())); setShowDatePicker(true); }} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all">
+                <span className="text-[#4A4A4A] font-medium">{profile.lmp ? new Date(profile.lmp).toLocaleDateString("en-US", { month: 'long', day: 'numeric', year: 'numeric' }) : "Pick a date"}</span>
                 <Calendar className="w-5 h-5 text-[#4A4A4A]" />
               </div>
             </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Estimated Due Date</label>
+              <div onClick={() => { setDatePickerMode("edd"); setViewDate(new Date(profile.edd || new Date())); setShowDatePicker(true); }} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all">
+                <span className="text-[#4A4A4A] font-medium">{profile.edd ? new Date(profile.edd).toLocaleDateString("en-US", { month: 'long', day: 'numeric', year: 'numeric' }) : "Pick a date"}</span>
+                <Calendar className="w-5 h-5 text-[#4A4A4A]" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Weeks Pregnant</label>
+              <div className="w-full py-4 px-6 bg-[#FFE6E9]/50 rounded-2xl text-[#FF818D] font-bold text-center border-2 border-[#FFE6E9]">{profile.weeks} Weeks</div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Days</label>
+              <div className="w-full py-4 px-6 bg-[#FFE6E9]/50 rounded-2xl text-[#FF818D] font-bold text-center border-2 border-[#FFE6E9]">{profile.days} Days</div>
+            </div>
+
             <div className="space-y-2 md:col-span-2"><label className="text-[#8E8E8E] text-xs font-bold uppercase ml-1">Daily Goal (kicks)</label><input type="number" name="goal" defaultValue={profile.dailyGoal} className="w-full py-4 px-6 bg-[#FDF1F1] rounded-2xl border-none text-[#4A4A4A] font-medium" /></div>
           </div>
-          <button type="submit" className="w-full py-4 bg-[#FF818D] text-white font-bold rounded-full shadow-md active:scale-95 transition-all">Save Profile</button>
+          <button type="submit" className="w-full py-5 bg-[#FF818D] text-white font-bold rounded-full shadow-[0_10px_25px_rgba(255,129,141,0.3)] hover:scale-[1.02] active:scale-95 transition-all">Save Profile</button>
         </form>
       </div>
 
