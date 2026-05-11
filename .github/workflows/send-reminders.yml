@@ -9,14 +9,13 @@ on:
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
-    environment: production # Change this if your environment name is different
     steps:
       - name: Call reminder cron endpoint
         run: |
           if [ -z "${{ secrets.APP_URL }}" ]; then
-            echo "Error: APP_URL secret is missing"
+            echo "Error: APP_URL secret is missing in Repository Secrets"
             exit 1
           fi
           curl -s -X GET "${{ secrets.APP_URL }}/api/cron/send-reminders" \
-            -H "Authorization: Bearer ${{ vars.CRON_SECRET }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -w "\nHTTP Status: %{http_code}\n"
