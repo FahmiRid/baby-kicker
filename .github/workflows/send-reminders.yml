@@ -9,13 +9,14 @@ on:
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
+    environment: Production - baby-kicker-blwv
     steps:
       - name: Call reminder cron endpoint
         run: |
           if [ -z "${{ secrets.APP_URL }}" ]; then
-            echo "Error: APP_URL secret is missing in Repository Secrets"
+            echo "Error: APP_URL secret is missing in environment 'Production - baby-kicker-blwv'"
             exit 1
           fi
           curl -s -X GET "${{ secrets.APP_URL }}/api/cron/send-reminders" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET || vars.CRON_SECRET }}" \
             -w "\nHTTP Status: %{http_code}\n"
