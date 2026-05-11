@@ -17,6 +17,8 @@ jobs:
             echo "Error: APP_URL secret is missing in environment 'Production - baby-kicker-blwv'"
             exit 1
           fi
-          curl -s -X GET "${{ secrets.APP_URL }}/api/cron/send-reminders" \
+          # Using -L to follow redirects and ensuring the URL is constructed correctly
+          CLEAN_URL=$(echo "${{ secrets.APP_URL }}" | sed 's/\/*$//')
+          curl -s -L -X GET "$CLEAN_URL/api/cron/send-reminders" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET || vars.CRON_SECRET }}" \
             -w "\nHTTP Status: %{http_code}\n"

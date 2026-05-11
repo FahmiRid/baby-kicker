@@ -1,0 +1,21 @@
+name: Test Reminders (Manual)
+
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  test-reminders:
+    runs-on: ubuntu-latest
+    environment: Production - baby-kicker-blwv
+    steps:
+      - name: Call reminder cron endpoint with TEST mode
+        run: |
+          if [ -z "${{ secrets.APP_URL }}" ]; then
+            echo "Error: APP_URL secret is missing"
+            exit 1
+          fi
+          CLEAN_URL=$(echo "${{ secrets.APP_URL }}" | sed 's/\/*$//')
+          echo "Calling $CLEAN_URL/api/cron/send-reminders?test=true"
+          curl -s -L -X GET "$CLEAN_URL/api/cron/send-reminders?test=true" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET || vars.CRON_SECRET }}" \
+            -w "\nHTTP Status: %{http_code}\n"
