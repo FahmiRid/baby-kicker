@@ -12,6 +12,8 @@ import { supabase } from "@/lib/supabase";
 export default function Dashboard() {
   const { data: session } = useSession();
 
+  const SESSION_KEY = "babykick_active_session";
+
   if (!supabase) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFF5F5] p-6 text-center">
@@ -38,6 +40,42 @@ export default function Dashboard() {
   const [startTime, setStartTime] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
+
+  // Restore active session from localStorage on mount (handles refresh / lock screen)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SESSION_KEY);
+      if (!saved) return;
+      const { kicks: k, seconds: s, isActive: active, startTime: st } = JSON.parse(saved);
+      if (k !== undefined) setKicks(k);
+      if (st) {
+        const savedStart = new Date(st);
+        setStartTime(savedStart);
+        if (active) {
+          // Add the time that passed while the app was away
+          const elapsed = Math.floor((Date.now() - savedStart.getTime()) / 1000);
+          setSeconds(elapsed);
+          setIsActive(true);
+        } else {
+          setSeconds(s || 0);
+          setIsActive(false);
+        }
+      }
+    } catch (e) {
+      // Ignore corrupt storage
+    }
+  }, []);
+
+  // Persist session state to localStorage whenever it changes
+  useEffect(() => {
+    if (startTime) {
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ kicks, seconds, isActive, startTime: startTime.toISOString() })
+      );
+    }
+  }, [kicks, seconds, isActive, startTime]);
+
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -383,6 +421,7 @@ export default function Dashboard() {
     
     setShowSummary(true);
     setIsActive(false);
+    localStorage.removeItem(SESSION_KEY);
   };
 
   const resetSession = () => {
@@ -391,6 +430,7 @@ export default function Dashboard() {
     setStartTime(null);
     setShowSummary(false);
     setSummaryData(null);
+    localStorage.removeItem(SESSION_KEY);
   };
 
   const togglePause = () => setIsActive(!isActive);
